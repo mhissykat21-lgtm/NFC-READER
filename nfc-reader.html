@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NFC Reader</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #2a2e38;
+    --text: #e8eaed;
+    --muted: #9aa0a8;
+    --accent: #4f8cff;
+    --ok: #33c17c;
+    --err: #ff5c5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 6px;
+  }
+  p.sub {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 20px;
+    line-height: 1.4;
+  }
+  button {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  button:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .field-label {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 20px 0 6px;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #0d0f13;
+    color: var(--text);
+    font-size: 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .status {
+    margin-top: 14px;
+    font-size: 13px;
+    min-height: 18px;
+  }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--err); }
+  .status.info { color: var(--muted); }
+  .pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: 6px;
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+  .log {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+    max-height: 120px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    display: none;
+  }
+  .log div { padding: 2px 0; font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>NFC Tag Reader</h1>
+  <p class="sub">Chrome on Android only, over HTTPS. Tap "Start Scanning", then hold an NFC tag to the back of your phone.</p>
+
+  <button id="scanBtn">Start Scanning</button>
+
+  <div class="field-label">Last scanned tag ID</div>
+  <input type="text" id="tagIdField" placeholder="Tag ID will appear here" readonly>
+
+  <div class="status info" id="status">Ready.</div>
+
+  <div class="log" id="log"></div>
+</div>
+
+<script>
+  const scanBtn = document.getElementById('scanBtn');
+  const tagIdField = document.getElementById('tagIdField');
+  const statusEl = document.getElementById('status');
+  const logEl = document.getElementById('log');
+
+  let scanning = false;
+
+  function setStatus(msg, type) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status ' + (type || 'info');
+  }
+
+  function addLog(msg) {
+    logEl.style.display = 'block';
+    const line = document.createElement('div');
+    const time = new Date().toLocaleTimeString();
+    line.textContent = `[${time}] ${msg}`;
+    logEl.prepend(line);
+  }
+
+  async function startScan() {
+    if (!('NDEFReader' in window)) {
+      setStatus('Web NFC is not supported in this browser. Use Chrome for Android.', 'err');
+      return;
+    }
+
+    try {
+      const reader = new NDEFReader();
+      await reader.scan();
+
+      scanning = true;
+      scanBtn.disabled = true;
+      scanBtn.textContent = 'Scanning… hold a tag near the phone';
+      setStatus('Waiting for a tag…', 'info');
+
+      reader.onreading = (event) => {
+        // event.serialNumber is the tag's hardware ID, e.g. "04:a3:b2:c1"
+        const id = (event.serialNumber || 'unknown').toUpperCase();
+        tagIdField.value = id;
+        setStatus('Tag read successfully.', 'ok');
+        addLog(`Tag scanned: ${id}`);
+      };
+
+      reader.onreadingerror = () => {
+        setStatus('Could not read that tag. Try again.', 'err');
+        addLog('Read error');
+      };
+
+    } catch (err) {
+      // Common causes: user denied permission, not served over HTTPS, no NFC hardware
+      setStatus('Error: ' + err.message, 'err');
+      addLog('Scan failed to start: ' + err.message);
+      scanBtn.disabled = false;
+      scanBtn.textContent = 'Start Scanning';
+      scanning = false;
+    }
+  }
+
+  scanBtn.addEventListener('click', startScan);
+</script>
+
+</body>
+</html>
